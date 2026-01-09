@@ -1,0 +1,37 @@
+<body>
+    <div id="app">
+        </div>
+
+    <div id="blazor-error-ui">
+        An unhandled error has occurred.
+        <a href="." class="reload">Reload</a>
+        <span class="dismiss">🗙</span>
+    </div>
+
+    <script src="_framework/blazor.webassembly.js"></script>
+    <script>navigator.serviceWorker.register('service-worker.js');</script>
+    
+<script>
+    window.blazorPushNotifications = {
+        requestSubscription: async () => {
+            console.log("JS: Checking Service Worker status...");
+            const worker = await navigator.serviceWorker.ready;
+            
+            console.log("JS: Service Worker is ready. Requesting PushManager...");
+            const sub = await worker.pushManager.subscribe({
+                userVisibleOnly: true,
+                applicationServerKey: 'BKMxMXsdv11hILIHp31vatUVgIKu_Pl57-nNnkHii8I1hPcC0dph7UyPeNEqRddCD9cbFpqpMxQLK4GGwRmT-nw'
+            });
+
+            console.log("JS: Subscription generated! Mapping keys...");
+            return {
+                endpoint: sub.endpoint,
+                keys: {
+                    p256dh: btoa(String.fromCharCode.apply(null, new Uint8Array(sub.getKey('p256dh')))),
+                    auth: btoa(String.fromCharCode.apply(null, new Uint8Array(sub.getKey('auth'))))
+                }
+            };
+        }
+    };
+</script>
+</body>

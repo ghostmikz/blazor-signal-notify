@@ -1,0 +1,83 @@
+﻿@page "/server-counter"
+@using Microsoft.AspNetCore.SignalR.Client
+@using Lib.Net.Http.WebPush
+@inject IJSRuntime JS
+@inject HttpClient Http
+@implements IAsyncDisposable
+
+<h1>Server Counter: @currentCount</h1>
+
+@* Use a unique class to ensure the button is clickable *@
+<button class="btn btn-success" @onclick="RequestPermission">Enable Notifications</button>
+
+@code {
+    private HubConnection? hubConnection;
+    private int currentCount = 0;
+
+    private async Task RequestPermission()
+    {
+        try 
+        {
+            Console.WriteLine("C#: Requesting permission...");
+            var permission = await JS.InvokeAsync<string>("Notification.requestPermission");
+            
+            if (permission == "granted")
+            {
+                Console.WriteLine("C#: Permission granted. Fetching subscription...");
+                
+                // Get the manual object from JS
+                var sub = await JS.InvokeAsync<PushSubscription>("blazorPushNotifications.requestSubscription");
+
+                // Use 127.0.0.1 to avoid ERR_CONNECTION_REFUSED on Linux
+                var response = await Http.PostAsJsonAsync("http://127.0.0.1:5214/api/notifications/subscribe", sub);
+                
+                if (response.IsSuccessStatusCode)
+                {
+                    Console.WriteLine("C#: SUCCESS! Subscription sent to server.");
+                }
+                else
+                {
+                    var errorBody = await response.Content.ReadAsStringAsync();
+                    Console.WriteLine($"C#: FAIL! Server returned {response.StatusCode}: {errorBody}");
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"C#: JS Error: {ex.Message}");
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Use 127.0.0.1 and port 5214 to match your server terminal
+        hubConnection = new HubConnectionBuilder()
+            .WithUrl("http://127.0.0.1:5214/counterhub") 
+            .WithAutomaticReconnect()
+            .Build();
+
+        hubConnection.On<int>("ReceiveCount", (count) => {
+            currentCount = count;
+            StateHasChanged();
+        });
+
+        hubConnection.On<string>("ShowNotification", async (msg) => {
+            await JS.InvokeVoidAsync("showNativeNotification", "Counter Alert", msg);
+        });
+
+        try {
+            await hubConnection.StartAsync();
+            Console.WriteLine("C#: SignalR Connected!");
+        } catch (Exception ex) {
+            Console.WriteLine($"C#: SignalR Connection Error: {ex.Message}");
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (hubConnection is not null)
+        {
+            await hubConnection.DisposeAsync();
+        }
+    }
+}
