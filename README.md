@@ -11,7 +11,7 @@ A lightweight .NET demo showing how to send SignalR Live Updates and Web Push No
    `cd Client && dotnet run`
 
 3. **Test the Flow:**
-   - **Manager:** Login as `boss`. Enable notifications. You will see a persistent history table.
+   - **Manager:** Login as `manager`. Enable notifications. You will see a persistent history table.
    - **Employee:** Login as `worker` in a separate/incognito window.
    - **Action:** Click "Send Request." The Employee gets a UI Toast, and the Manager receives a Desktop Push Notification.
 

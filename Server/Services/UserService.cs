@@ -11,7 +11,7 @@ public static class UserService
     // Mock Database
     private static readonly List<UserProfile> _users = new()
     {
-        new UserProfile { Username = "Manager", Role = "Manager" },
+        new UserProfile { Username = "manager", Role = "Manager" },
         new UserProfile { Username = "worker1", Role = "Employee" }
     };
 
