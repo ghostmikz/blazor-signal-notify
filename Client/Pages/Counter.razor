@@ -1,83 +1,47 @@
-﻿@page "/server-counter"
-@using Microsoft.AspNetCore.SignalR.Client
-@using Lib.Net.Http.WebPush
+﻿@page "/request-portal"
 @inject IJSRuntime JS
 @inject HttpClient Http
-@implements IAsyncDisposable
 
-<h1>Server Counter: @currentCount</h1>
+<h1>HR Request Portal</h1>
 
-@* Use a unique class to ensure the button is clickable *@
-<button class="btn btn-success" @onclick="RequestPermission">Enable Notifications</button>
+<div class="row">
+    <div class="col-md-6">
+        <div class="card p-3 shadow-sm">
+            <h3>Manager Setup</h3>
+            <button class="btn btn-primary" @onclick='() => Subscribe("Manager")'>
+                Enable Manager Alerts
+            </button>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card p-3 shadow-sm border-warning">
+            <h3>Employee Action</h3>
+            @* The button now calls the silent method *@
+            <button class="btn btn-warning" @onclick="SendRequest">
+                Send Leave Request
+            </button>
+        </div>
+    </div>
+</div>
 
 @code {
-    private HubConnection? hubConnection;
-    private int currentCount = 0;
-
-    private async Task RequestPermission()
+    private async Task Subscribe(string role)
     {
-        try 
+        var permission = await JS.InvokeAsync<string>("Notification.requestPermission");
+        if (permission == "granted")
         {
-            Console.WriteLine("C#: Requesting permission...");
-            var permission = await JS.InvokeAsync<string>("Notification.requestPermission");
-            
-            if (permission == "granted")
-            {
-                Console.WriteLine("C#: Permission granted. Fetching subscription...");
-                
-                // Get the manual object from JS
-                var sub = await JS.InvokeAsync<PushSubscription>("blazorPushNotifications.requestSubscription");
-
-                // Use 127.0.0.1 to avoid ERR_CONNECTION_REFUSED on Linux
-                var response = await Http.PostAsJsonAsync("http://127.0.0.1:5214/api/notifications/subscribe", sub);
-                
-                if (response.IsSuccessStatusCode)
-                {
-                    Console.WriteLine("C#: SUCCESS! Subscription sent to server.");
-                }
-                else
-                {
-                    var errorBody = await response.Content.ReadAsStringAsync();
-                    Console.WriteLine($"C#: FAIL! Server returned {response.StatusCode}: {errorBody}");
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"C#: JS Error: {ex.Message}");
+            var sub = await JS.InvokeAsync<object>("blazorPushNotifications.requestSubscription");
+            await Http.PostAsJsonAsync($"api/notifications/subscribe/{role}", sub);
         }
     }
 
-    protected override async Task OnInitializedAsync()
+    private async Task SendRequest()
     {
-        // Use 127.0.0.1 and port 5214 to match your server terminal
-        hubConnection = new HubConnectionBuilder()
-            .WithUrl("http://127.0.0.1:5214/counterhub") 
-            .WithAutomaticReconnect()
-            .Build();
-
-        hubConnection.On<int>("ReceiveCount", (count) => {
-            currentCount = count;
-            StateHasChanged();
-        });
-
-        hubConnection.On<string>("ShowNotification", async (msg) => {
-            await JS.InvokeVoidAsync("showNativeNotification", "Counter Alert", msg);
-        });
-
-        try {
-            await hubConnection.StartAsync();
-            Console.WriteLine("C#: SignalR Connected!");
-        } catch (Exception ex) {
-            Console.WriteLine($"C#: SignalR Connection Error: {ex.Message}");
-        }
-    }
-
-    public async ValueTask DisposeAsync()
-    {
-        if (hubConnection is not null)
-        {
-            await hubConnection.DisposeAsync();
-        }
+        // This now runs silently in the background
+        await Http.PostAsync("api/notifications/request-leave", null);
+        
+        // I removed the JS.InvokeVoidAsync("alert", ...) line from here
+        Console.WriteLine("C#: Request sent silently to server.");
     }
 }

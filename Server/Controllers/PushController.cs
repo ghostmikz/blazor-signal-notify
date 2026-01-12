@@ -1,32 +1,58 @@
 using Microsoft.AspNetCore.Mvc;
-using Lib.Net.Http.WebPush; // Ensure this is here
+using Lib.Net.Http.WebPush;
 using Server.Services;
 
 namespace Server.Controllers;
 
 [ApiController]
-[Route("api/notifications")]
+[Route("api/notifications")] // <-- THE URL BASE
 public class PushController : ControllerBase
 {
-[HttpPost("subscribe")]
-public IActionResult Subscribe([FromBody] System.Text.Json.JsonElement rawJson)
-{
-    // Log the RAW JSON string to the terminal
-    Console.WriteLine("SERVER RECEIVED RAW DATA: " + rawJson.ToString());
+    private readonly PushServiceClient _pushClient;
 
-    try {
-        var options = new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-        var subscription = System.Text.Json.JsonSerializer.Deserialize<Lib.Net.Http.WebPush.PushSubscription>(rawJson.GetRawText(), options);
-
-        if (subscription != null && !string.IsNullOrEmpty(subscription.Endpoint)) {
-            Server.Services.SubscriptionStore.Current = subscription;
-            Console.WriteLine("===> SUCCESS: Subscription Saved! <===");
-            return Ok();
-        }
-    } catch (Exception ex) {
-        Console.WriteLine("SERVER ERROR: " + ex.Message);
+    public PushController(PushServiceClient pushClient)
+    {
+        _pushClient = pushClient;
     }
 
-    return BadRequest("Data was invalid");
-}
+    [HttpPost("subscribe/{username}/{role}")]
+    public IActionResult Subscribe(string username, string role, [FromBody] PushSubscription subscription)
+    {
+        // Force the key to be consistent
+        SubscriptionStore.AddSubscription(role, subscription);
+        Console.WriteLine($">>> [SERVER] Subscribed: {username} as {role}");
+        return Ok();
+    }
+
+    [HttpPost("request-leave")]
+    public async Task<IActionResult> RequestLeave()
+    {
+        string msgText = $"Leave Request at {DateTime.Now:T}";
+        SubscriptionStore.LogRequest(msgText);
+
+        // We look specifically for "Manager"
+        if (SubscriptionStore.TryGetSubscription("Manager", out var sub))
+        {
+            try {
+                var message = new PushMessage(msgText) { Urgency = PushMessageUrgency.High };
+                await _pushClient.RequestPushMessageDeliveryAsync(sub, message);
+                Console.WriteLine(">>> [SERVER] Push sent to Manager.");
+            } catch (Exception ex) { 
+                Console.WriteLine($">>> [SERVER] Push failed: {ex.Message}");
+            }
+        }
+        return Ok();
+    }
+
+    [HttpGet("history")]
+    public IActionResult GetHistory() => Ok(SubscriptionStore.GetLogs());
+
+    [HttpPost("unsubscribe/{role}")]
+    public IActionResult Unsubscribe(string role)
+    {
+        // This is the "Wire Cutter"
+        SubscriptionStore.RemoveSubscription(role);
+        Console.WriteLine($">>> [SERVER] SUCCESS: {role} is now UNSUBSCRIBED.");
+        return Ok();
+    }
 }

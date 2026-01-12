@@ -1,18 +1,21 @@
-// Listen for the push event from the server
 self.addEventListener('push', event => {
-    const payload = event.data ? event.data.text() : 'No payload';
+    const payload = event.data ? event.data.text() : 'New Request Received';
     
-    event.waitUntil(
-        self.registration.showNotification('Server Counter', {
-            body: payload,
-            icon: 'favicon.png',
-            vibrate: [100, 50, 100],
-            data: { url: '/' }
-        })
-    );
-});
+    const options = {
+        body: payload,
+        icon: 'icon-192.png', // Ensure this file exists in wwwroot
+        vibrate: [100, 50, 100],
+        data: {
+            dateOfArrival: Date.now(),
+            primaryKey: 1
+        },
+        actions: [
+            { action: 'view', title: 'Open App' },
+            { action: 'close', title: 'Dismiss' }
+        ]
+    };
 
-self.addEventListener('notificationclick', event => {
-    event.notification.close();
-    event.waitUntil(clients.openWindow(event.notification.data.url));
+    event.waitUntil(
+        self.registration.showNotification('Manager Alert', options)
+    );
 });

@@ -1,0 +1,23 @@
+@inject HttpClient Http
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<button class="btn btn-outline-danger btn-sm" @onclick="HandleLogout">
+    Logout
+</button>
+
+@code {
+    [Parameter] public string Role { get; set; } = "";
+
+    private async Task HandleLogout()
+    {
+        // 1. Tell the server to delete the push subscription
+        await Http.PostAsync($"api/notifications/unsubscribe/{Role}", null);
+
+        // 2. Optional: You can also tell the browser to unsubscribe from the push service
+        // await JS.InvokeVoidAsync("blazorPushNotifications.unsubscribe");
+
+        // 3. Redirect to login
+        Nav.NavigateTo("/login");
+    }
+}

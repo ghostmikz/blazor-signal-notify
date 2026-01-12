@@ -1,0 +1,133 @@
+@page "/manager-dashboard"
+@inject HttpClient Http
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<div class="container mt-5">
+    @* Header with Logout *@
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>Manager Dashboard</h2>
+        <button class="btn btn-outline-danger" @onclick="HandleLogout">
+            Logout
+        </button>
+    </div>
+
+    @* Status Banner *@
+    <div class="alert alert-success d-flex align-items-center shadow-sm">
+        <div>
+            <h4 class="alert-heading mb-1">Push Notifications Active</h4>
+            <p class="mb-0">You are logged in as <strong>Manager</strong>. You'll see new popups now, and older requests are listed below.</p>
+        </div>
+    </div>
+
+    @* Activity Feed *@
+    <div class="card shadow-sm mt-4">
+        <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">Incoming Leave Requests</h5>
+            <span class="badge bg-light text-primary">@requests.Count Total</span>
+        </div>
+        <div class="card-body">
+            @if (requests == null || requests.Count == 0)
+            {
+                <div class="text-center py-5">
+                    <p class="text-muted mb-0">No history found. Listening for incoming alerts...</p>
+                </div>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Date & Time</th>
+                                <th>Description</th>
+                                <th>Status</th>
+                                <th>Action</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var req in requests)
+                            {
+                                <tr>
+                                    <td>@req.Time.ToString("MM/dd HH:mm:ss")</td>
+                                    <td>@req.Message</td>
+                                    <td><span class="badge bg-success">Received</span></td>
+                                    <td>
+                                        <button class="btn btn-sm btn-outline-success">View</button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    // This matches the RequestLog class on the Server
+    private List<RequestLog> requests = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadHistory();
+    }
+
+    private async Task LoadHistory()
+    {
+        try
+        {
+            // Fetch the "Permanent Record" from the server
+            // This includes everything that happened while logged out
+            var result = await Http.GetFromJsonAsync<List<RequestLog>>("api/notifications/history");
+            if (result != null)
+            {
+                requests = result;
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Error loading history: {ex.Message}");
+        }
+    }
+
+private async Task HandleLogout()
+{
+    Console.WriteLine(">>> Logout button clicked.");
+
+    try
+    {
+        // 1. Force the role name to "Manager" to match the server key
+        var response = await Http.PostAsync("api/notifications/unsubscribe/Manager", null);
+
+        if (response.IsSuccessStatusCode)
+        {
+            Console.WriteLine(">>> SERVER: Successfully unsubscribed.");
+        }
+        else
+        {
+            // If you see this, the URL is likely wrong (404) or blocked (401)
+            Console.WriteLine($">>> SERVER ERROR: {response.StatusCode}");
+        }
+
+        // 2. Kill the browser's listener (The "Kill Switch")
+        await JS.InvokeVoidAsync("blazorPushNotifications.unsubscribeUser");
+        Console.WriteLine(">>> BROWSER: Unsubscribed from push.");
+
+        Nav.NavigateTo("/login");
+    }
+    catch (Exception ex)
+    {
+        Console.WriteLine($">>> CRITICAL ERROR: {ex.Message}");
+        Nav.NavigateTo("/login");
+    }
+}
+
+    // This must match the structure of the data coming from the Server
+    public class RequestLog 
+    { 
+        public string Message { get; set; } = ""; 
+        public DateTime Time { get; set; } 
+    }
+}

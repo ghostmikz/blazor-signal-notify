@@ -1,0 +1,91 @@
+@page "/employee-portal"
+@inject HttpClient Http
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<div class="container mt-5">
+    @* Header with Logout *@
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>Employee Portal</h2>
+        <button class="btn btn-outline-danger" @onclick="HandleLogout">
+            Logout
+        </button>
+    </div>
+
+    @* Main Action Card *@
+    <div class="card shadow-sm border-0 bg-light">
+        <div class="card-body text-center p-5">
+            <div class="mb-4">
+                <i class="bi bi-calendar-check text-warning" style="font-size: 4rem;"></i>
+            </div>
+            <h3 class="card-title">Request Time Off</h3>
+            <p class="text-muted">
+                Clicking the button below will send an instant push notification 
+                directly to the Manager's desktop.
+            </p>
+            
+            @if (!string.IsNullOrEmpty(statusMessage))
+            {
+                <div class="alert alert-info py-2">@statusMessage</div>
+            }
+
+            <button class="btn btn-warning btn-lg px-5 mt-3 shadow" 
+                    @onclick="SendRequest" 
+                    disabled="@isSending">
+                @(isSending ? "Sending..." : "🚀 Send Request Now")
+            </button>
+        </div>
+    </div>
+</div>
+
+@code {
+    private bool isSending = false;
+    private string statusMessage = "";
+
+    private async Task SendRequest()
+    {
+        isSending = true;
+        statusMessage = "Sending request to manager...";
+
+        try
+        {
+            var response = await Http.PostAsync("api/notifications/request-leave", null);
+            
+            if (response.IsSuccessStatusCode)
+            {
+                statusMessage = "✅ Request sent! The manager has been notified.";
+            }
+            else
+            {
+                statusMessage = "❌ Manager is currently offline or unavailable.";
+            }
+        }
+        catch (Exception ex)
+        {
+            statusMessage = "⚠️ Connection error. Please try again.";
+            Console.WriteLine(ex.Message);
+        }
+        finally
+        {
+            isSending = false;
+        }
+    }
+
+    private async Task HandleLogout()
+    {
+        try
+        {
+            // 1. Remove this device from the server's notification store
+            // We use the "Employee" role here
+            await Http.PostAsync("api/notifications/unsubscribe/Employee", null);
+
+            // 2. Clear browser-side session and go back to login
+            Nav.NavigateTo("/login");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Logout error: {ex.Message}");
+            Nav.NavigateTo("/login");
+        }
+    }
+}
