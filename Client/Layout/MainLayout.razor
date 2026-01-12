@@ -1,7 +1,18 @@
-﻿@inherits LayoutComponentBase
+﻿@using ServerCounterApp.Client.Services
+@inject PushNotificationService PushService
 
-<div class="page-container">
-    <main class="modern-card">
+@inherits LayoutComponentBase
+
+<div class="page">
+    <main>
         @Body
     </main>
 </div>
+
+@code {
+    protected override async Task OnInitializedAsync()
+    {
+        // Example: Set unread count to 3 on load to test it
+        await PushService.SetUnreadCount(3);
+    }
+}

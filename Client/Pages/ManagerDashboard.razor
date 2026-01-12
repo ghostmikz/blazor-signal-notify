@@ -1,7 +1,9 @@
 @page "/manager-dashboard"
+@using ServerCounterApp.Client.Services
 @inject HttpClient Http
 @inject NavigationManager Nav
 @inject IJSRuntime JS
+@inject PushNotificationService PushService
 
 <div class="container mt-5">
     @* Header with Logout *@
@@ -12,11 +14,37 @@
         </button>
     </div>
 
+    @* Notification Setup Card *@
+    <div class="card shadow-sm mb-4 border-primary">
+        <div class="card-body d-flex justify-content-between align-items-center">
+            <div>
+                <h5 class="card-title mb-1">Push Notification Settings</h5>
+                <p class="text-muted small mb-0">Allow this browser to receive desktop alerts even when the tab is closed.</p>
+            </div>
+            <button class="btn btn-primary" @onclick="EnableNotifications" disabled="@isSubscribing">
+                @if (isSubscribing)
+                {
+                    <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                }
+                else
+                {
+                    <span>🔔 Enable Alerts</span>
+                }
+            </button>
+        </div>
+        @if (!string.IsNullOrEmpty(statusMessage))
+        {
+            <div class="card-footer py-1">
+                <small class="@(statusMessage.Contains("❌") ? "text-danger" : "text-success")">@statusMessage</small>
+            </div>
+        }
+    </div>
+
     @* Status Banner *@
     <div class="alert alert-success d-flex align-items-center shadow-sm">
         <div>
-            <h4 class="alert-heading mb-1">Push Notifications Active</h4>
-            <p class="mb-0">You are logged in as <strong>Manager</strong>. You'll see new popups now, and older requests are listed below.</p>
+            <h4 class="alert-heading mb-1">Dashboard Active</h4>
+            <p class="mb-0">You are logged in as <strong>Manager</strong>. Incoming requests will appear below.</p>
         </div>
     </div>
 
@@ -66,25 +94,54 @@
 </div>
 
 @code {
-    // This matches the RequestLog class on the Server
     private List<RequestLog> requests = new();
+    private string? statusMessage;
+    private bool isSubscribing = false;
 
     protected override async Task OnInitializedAsync()
     {
         await LoadHistory();
+        // Set tab title to clean state
+        await PushService.SetUnreadCount(0);
+    }
+
+    private async Task EnableNotifications()
+    {
+        isSubscribing = true;
+        statusMessage = "Requesting permission...";
+        
+        try
+        {
+            var subscription = await PushService.SubscribeUserAsync();
+            
+            // Note: Sending 'Manager' as both username and role for now per your logout logic
+            var response = await Http.PostAsJsonAsync("api/notifications/subscribe/Manager/Manager", subscription);
+
+            if (response.IsSuccessStatusCode)
+            {
+                statusMessage = "✅ Notifications enabled successfully!";
+            }
+            else
+            {
+                statusMessage = $"❌ Server refused subscription ({response.StatusCode})";
+            }
+        }
+        catch (Exception ex)
+        {
+            statusMessage = $"❌ Failed: {ex.Message}";
+        }
+        finally
+        {
+            isSubscribing = false;
+        }
     }
 
     private async Task LoadHistory()
     {
         try
         {
-            // Fetch the "Permanent Record" from the server
-            // This includes everything that happened while logged out
             var result = await Http.GetFromJsonAsync<List<RequestLog>>("api/notifications/history");
-            if (result != null)
-            {
-                requests = result;
-            }
+            if (result != null) requests = result;
         }
         catch (Exception ex)
         {
@@ -92,39 +149,20 @@
         }
     }
 
-private async Task HandleLogout()
-{
-    Console.WriteLine(">>> Logout button clicked.");
-
-    try
+    private async Task HandleLogout()
     {
-        // 1. Force the role name to "Manager" to match the server key
-        var response = await Http.PostAsync("api/notifications/unsubscribe/Manager", null);
-
-        if (response.IsSuccessStatusCode)
+        try
         {
-            Console.WriteLine(">>> SERVER: Successfully unsubscribed.");
+            await Http.PostAsync("api/notifications/unsubscribe/Manager", null);
+            await JS.InvokeVoidAsync("blazorPushNotifications.unsubscribeUser");
+            Nav.NavigateTo("/login");
         }
-        else
+        catch
         {
-            // If you see this, the URL is likely wrong (404) or blocked (401)
-            Console.WriteLine($">>> SERVER ERROR: {response.StatusCode}");
+            Nav.NavigateTo("/login");
         }
-
-        // 2. Kill the browser's listener (The "Kill Switch")
-        await JS.InvokeVoidAsync("blazorPushNotifications.unsubscribeUser");
-        Console.WriteLine(">>> BROWSER: Unsubscribed from push.");
-
-        Nav.NavigateTo("/login");
     }
-    catch (Exception ex)
-    {
-        Console.WriteLine($">>> CRITICAL ERROR: {ex.Message}");
-        Nav.NavigateTo("/login");
-    }
-}
 
-    // This must match the structure of the data coming from the Server
     public class RequestLog 
     { 
         public string Message { get; set; } = ""; 

@@ -46,6 +46,14 @@ window.blazorPushNotifications = {
                 auth: btoa(String.fromCharCode.apply(null, new Uint8Array(sub.getKey('auth'))))
             }
         };
+    },
+    updateTabTitle: (count) => {
+        const baseTitle = "SignalNotify";
+        if (count > 0) {
+            document.title = `(${count}) ${baseTitle}`;
+        } else {
+            document.title = baseTitle;
+        }
     }
 };
     </script>
